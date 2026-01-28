@@ -79,4 +79,13 @@ export class SearchTrekkingPlacesDto {
   @Min(1)
   @Max(100)
   limit?: number = 20;
+
+  @ApiPropertyOptional({
+    description:
+      'Consulta en lenguaje natural para búsqueda inteligente. Ej: "lugares fáciles cerca de Santiago con sombra"',
+    example: 'lugares fáciles cerca de Santiago',
+  })
+  @IsOptional()
+  @IsString()
+  query?: string;
 }

@@ -3,6 +3,8 @@ import { HttpModule } from '@nestjs/axios';
 import { TrekkingPlacesController } from './trekking-places.controller';
 import { TrekkingPlacesService } from './trekking-places.service';
 import { OverpassService } from './services/overpass.service';
+import { GeocodingService } from './services/geocoding.service';
+import { AIService } from './services/ai.service';
 
 @Module({
   imports: [
@@ -12,7 +14,7 @@ import { OverpassService } from './services/overpass.service';
     }),
   ],
   controllers: [TrekkingPlacesController],
-  providers: [TrekkingPlacesService, OverpassService],
+  providers: [TrekkingPlacesService, OverpassService, GeocodingService, AIService],
   exports: [TrekkingPlacesService],
 })
 export class TrekkingPlacesModule {}

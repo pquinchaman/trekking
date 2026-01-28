@@ -73,25 +73,25 @@ export class OverpassService {
 
         this.logger.debug(`Consulta Overpass exitosa. Elementos recibidos: ${response.data.elements?.length || 0}`);
         return this.transformOverpassResponse(response.data.elements, searchDto);
-      } catch (error) {
+      } catch (error: any) {
         lastError = error;
-        const isTimeout = error.response?.status === 504 || error.code === 'ECONNABORTED';
-        const isRetryable = isTimeout || error.response?.status >= 500;
+        const isTimeout = error?.response?.status === 504 || error?.code === 'ECONNABORTED';
+        const isRetryable = isTimeout || (error?.response?.status >= 500);
         
         if (!isRetryable || attempt === this.maxRetries) {
           this.logger.error(
-            `Error al consultar Overpass API (intento ${attempt + 1}/${this.maxRetries + 1}): ${error.message}`,
-            error.stack,
+            `Error al consultar Overpass API (intento ${attempt + 1}/${this.maxRetries + 1}): ${error?.message || 'Error desconocido'}`,
+            error?.stack,
           );
           break;
         }
         
-        this.logger.warn(`Error temporal en consulta Overpass: ${error.message}. Reintentando...`);
+        this.logger.warn(`Error temporal en consulta Overpass: ${error?.message || 'Error desconocido'}. Reintentando...`);
       }
     }
 
     // Si es un timeout, proporcionar un mensaje más específico
-    if (lastError?.response?.status === 504) {
+    if (lastError && (lastError as any)?.response?.status === 504) {
       throw new HttpException(
         'La consulta está tardando demasiado. Intenta reducir el radio de búsqueda o especificar un nombre.',
         HttpStatus.GATEWAY_TIMEOUT,

@@ -6,6 +6,8 @@ Backend API desarrollado con NestJS para obtener información sobre lugares de t
 
 - **Integración con OpenStreetMap**: Utiliza Overpass API para obtener datos de senderos y lugares de trekking
 - **Búsqueda flexible**: Busca por ubicación, radio, nombre y dificultad
+- **Geocodificación inteligente**: Convierte nombres de lugares en coordenadas usando Google Maps API
+- **Búsqueda con Inteligencia Artificial**: Procesa consultas en lenguaje natural y genera recomendaciones personalizadas
 - **Documentación Swagger**: API completamente documentada
 - **Validación de datos**: Validación automática de parámetros de entrada
 - **Manejo de errores**: Manejo robusto de errores y logging
@@ -30,7 +32,15 @@ npm install
 cp .env.example .env
 ```
 
-Editar `.env` con tus configuraciones si es necesario.
+Editar `.env` con tus configuraciones. **Importante**: Para habilitar todas las características, necesitas:
+
+- **Google Maps API Key** (opcional pero recomendado): Para geocodificación de nombres de lugares
+  - Obtén tu API Key en: https://console.cloud.google.com/
+  - Habilita la API de Geocoding en tu proyecto
+  
+- **OpenAI API Key** (opcional pero recomendado): Para búsqueda inteligente con IA
+  - Obtén tu API Key en: https://platform.openai.com/api-keys
+  - El servicio funciona sin estas APIs, pero con funcionalidad limitada
 
 ## 🏃 Ejecución
 
@@ -138,12 +148,21 @@ npm run test:e2e
 - `npm run lint`: Ejecuta el linter
 - `npm run format`: Formatea el código con Prettier
 
-## 🔍 Fuentes de Datos
+## 🔍 Fuentes de Datos y Servicios
 
 Este proyecto utiliza:
 
 - **OpenStreetMap**: A través de Overpass API para obtener datos de senderos y lugares de trekking
-- Los datos son proporcionados por la comunidad de OpenStreetMap y están bajo licencia ODbL
+  - Los datos son proporcionados por la comunidad de OpenStreetMap y están bajo licencia ODbL
+  
+- **Google Maps Geocoding API** (opcional): Para convertir nombres de lugares en coordenadas
+  - Requiere API Key configurada en `GOOGLE_MAPS_API_KEY`
+  - Sin esta API, la geocodificación automática no estará disponible
+  
+- **OpenAI API** (opcional): Para procesamiento de lenguaje natural y generación de recomendaciones
+  - Requiere API Key configurada en `OPENAI_API_KEY`
+  - Sin esta API, la búsqueda inteligente con IA no estará disponible
+  - Modelo por defecto: `gpt-4o-mini` (configurable con `OPENAI_MODEL`)
 
 ## 📄 Licencia
 

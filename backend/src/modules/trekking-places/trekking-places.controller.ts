@@ -15,7 +15,14 @@ export class TrekkingPlacesController {
     summary: 'Buscar lugares de trekking y senderismo en Chile',
     description:
       'Obtiene una lista de lugares donde se puede realizar trekking o senderismo en Chile. ' +
-      'Los datos provienen de OpenStreetMap a través de Overpass API.',
+      'Los datos provienen de OpenStreetMap a través de Overpass API. ' +
+      'Soporta búsqueda inteligente con lenguaje natural usando IA y geocodificación automática de nombres de lugares.',
+  })
+  @ApiQuery({
+    name: 'query',
+    required: false,
+    description: 'Consulta en lenguaje natural para búsqueda inteligente. Ej: "lugares fáciles cerca de Santiago con sombra"',
+    example: 'lugares fáciles cerca de Santiago',
   })
   @ApiResponse({
     status: 200,

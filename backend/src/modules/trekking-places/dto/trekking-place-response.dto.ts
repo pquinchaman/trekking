@@ -52,4 +52,10 @@ export class TrekkingPlacesResponseDto {
 
   @ApiProperty({ description: 'Límite de resultados aplicado', example: 20 })
   limit: number;
+
+  @ApiProperty({
+    description: 'Recomendación generada por IA (si se usó búsqueda inteligente)',
+    required: false,
+  })
+  aiRecommendation?: string;
 }
