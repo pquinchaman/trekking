@@ -1,6 +1,7 @@
 import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Client } from '@googlemaps/google-maps-services-js';
+import { HttpService } from '@nestjs/axios';
+import { firstValueFrom } from 'rxjs';
 
 export interface GeocodingResult {
   lat: number;
@@ -9,11 +10,19 @@ export interface GeocodingResult {
   placeId?: string;
 }
 
+interface NominatimResult {
+  lat: string;
+  lon: string;
+  display_name: string;
+  place_id: number;
+  boundingbox: [string, string, string, string]; // [minLat, maxLat, minLon, maxLon]
+}
+
 @Injectable()
 export class GeocodingService {
   private readonly logger = new Logger(GeocodingService.name);
-  private readonly client: Client;
-  private readonly apiKey: string;
+  private readonly nominatimUrl: string;
+  private readonly userAgent: string;
   private readonly chileBounds = {
     minLat: -56.0,
     maxLat: -17.5,
@@ -21,50 +30,58 @@ export class GeocodingService {
     maxLon: -66.4,
   };
 
-  constructor(private readonly configService: ConfigService) {
-    this.apiKey = this.configService.get<string>('googleMaps.apiKey');
-    this.client = new Client({});
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly httpService: HttpService,
+  ) {
+    this.nominatimUrl =
+      this.configService.get<string>('nominatim.apiUrl') ||
+      'https://nominatim.openstreetmap.org/search';
+    // User-Agent es requerido por la política de uso de Nominatim
+    this.userAgent =
+      this.configService.get<string>('nominatim.userAgent') ||
+      'TrekkingPlacesApp/1.0 (contact@example.com)';
   }
 
   /**
-   * Geocodifica un nombre de lugar a coordenadas
+   * Geocodifica un nombre de lugar a coordenadas usando Nominatim (OpenStreetMap)
    * @param placeName Nombre del lugar (ej: "Cajón del Maipo", "Torres del Paine")
    * @returns Coordenadas y dirección formateada
    */
   async geocode(placeName: string): Promise<GeocodingResult> {
-    if (!this.apiKey) {
-      this.logger.warn('Google Maps API Key no configurada. La geocodificación no estará disponible.');
-      throw new HttpException(
-        'Servicio de geocodificación no configurado. Configure GOOGLE_MAPS_API_KEY.',
-        HttpStatus.SERVICE_UNAVAILABLE,
-      );
-    }
-
     try {
-      this.logger.debug(`Geocodificando lugar: ${placeName}`);
+      this.logger.debug(`Geocodificando lugar con Nominatim: ${placeName}`);
 
       // Agregar "Chile" al final para mejorar la precisión
-      const searchQuery = placeName.includes('Chile') ? placeName : `${placeName}, Chile`;
+      const searchQuery = placeName.includes('Chile')
+        ? placeName
+        : `${placeName}, Chile`;
 
-      const response = await this.client.geocode({
-        params: {
-          address: searchQuery,
-          key: this.apiKey,
-          region: 'cl',
-          bounds: {
-            northeast: {
-              lat: this.chileBounds.maxLat,
-              lng: this.chileBounds.maxLon,
-            },
-            southwest: {
-              lat: this.chileBounds.minLat,
-              lng: this.chileBounds.minLon,
-            },
-          },
-        },
+      // Construir parámetros de búsqueda para limitar a Chile
+      const params = new URLSearchParams({
+        q: searchQuery,
+        format: 'json',
+        limit: '10',
+        countrycodes: 'cl', // Limitar a Chile
+        addressdetails: '1',
+        // Bounding box para Chile (south, north, west, east)
+        viewbox: `${this.chileBounds.minLon},${this.chileBounds.maxLat},${this.chileBounds.maxLon},${this.chileBounds.minLat}`,
+        bounded: '1', // Solo resultados dentro del bounding box
       });
 
-      if (!response.data.results || response.data.results.length === 0) {
+      const response = await firstValueFrom(
+        this.httpService.get<NominatimResult[]>(
+          `${this.nominatimUrl}?${params.toString()}`,
+          {
+            headers: {
+              'User-Agent': this.userAgent,
+            },
+            timeout: 10000,
+          },
+        ),
+      );
+
+      if (!response.data || response.data.length === 0) {
         this.logger.warn(`No se encontraron resultados para: ${placeName}`);
         throw new HttpException(
           `No se pudo encontrar el lugar: ${placeName}`,
@@ -72,39 +89,42 @@ export class GeocodingService {
         );
       }
 
-      // Filtrar resultados que estén dentro de Chile
-      const chileResults = response.data.results.filter((result) => {
-        const lat = result.geometry.location.lat;
-        const lng = result.geometry.location.lng;
+      // Filtrar resultados que estén dentro de los límites de Chile
+      const chileResults = response.data.filter((result) => {
+        const lat = parseFloat(result.lat);
+        const lon = parseFloat(result.lon);
         return (
           lat >= this.chileBounds.minLat &&
           lat <= this.chileBounds.maxLat &&
-          lng >= this.chileBounds.minLon &&
-          lng <= this.chileBounds.maxLon
+          lon >= this.chileBounds.minLon &&
+          lon <= this.chileBounds.maxLon
         );
       });
 
       if (chileResults.length === 0) {
-        this.logger.warn(`No se encontraron resultados en Chile para: ${placeName}`);
+        this.logger.warn(
+          `No se encontraron resultados en Chile para: ${placeName}`,
+        );
         throw new HttpException(
           `No se encontró el lugar "${placeName}" en Chile`,
           HttpStatus.NOT_FOUND,
         );
       }
 
-      // Tomar el primer resultado (más relevante)
+      // Tomar el primer resultado (más relevante según Nominatim)
       const result = chileResults[0];
-      const location = result.geometry.location;
+      const lat = parseFloat(result.lat);
+      const lon = parseFloat(result.lon);
 
       this.logger.debug(
-        `Geocodificación exitosa: ${placeName} -> (${location.lat}, ${location.lng})`,
+        `Geocodificación exitosa: ${placeName} -> (${lat}, ${lon})`,
       );
 
       return {
-        lat: location.lat,
-        lon: location.lng,
-        formattedAddress: result.formatted_address,
-        placeId: result.place_id,
+        lat,
+        lon,
+        formattedAddress: result.display_name,
+        placeId: result.place_id.toString(),
       };
     } catch (error) {
       if (error instanceof HttpException) {
@@ -116,10 +136,11 @@ export class GeocodingService {
         error.stack,
       );
 
-      if (error.response?.status === 403) {
+      // Manejar errores específicos de Nominatim
+      if (error.response?.status === 429) {
         throw new HttpException(
-          'Error de autenticación con Google Maps API. Verifique su API Key.',
-          HttpStatus.FORBIDDEN,
+          'Demasiadas solicitudes a Nominatim. Por favor, espere un momento.',
+          HttpStatus.TOO_MANY_REQUESTS,
         );
       }
 
@@ -132,8 +153,9 @@ export class GeocodingService {
 
   /**
    * Verifica si el servicio está disponible
+   * Nominatim siempre está disponible (no requiere API key)
    */
   isAvailable(): boolean {
-    return !!this.apiKey;
+    return true;
   }
 }

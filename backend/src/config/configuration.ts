@@ -13,6 +13,11 @@ export const configuration = () => ({
       maxLon: -66.4,
     },
   },
+  nominatim: {
+    apiUrl: process.env.NOMINATIM_API_URL || 'https://nominatim.openstreetmap.org/search',
+    userAgent: process.env.NOMINATIM_USER_AGENT || 'TrekkingPlacesApp/1.0 (contact@example.com)',
+  },
+  // Mantener googleMaps por compatibilidad, pero ya no es necesario
   googleMaps: {
     apiKey: process.env.GOOGLE_MAPS_API_KEY || '',
   },
