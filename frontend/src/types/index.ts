@@ -30,6 +30,7 @@ export interface TrekkingPlacesResponse {
   places: TrekkingPlace[];
   total: number;
   limit: number;
+  aiRecommendation?: string;
 }
 
 export interface SearchTrekkingPlacesParams {
@@ -39,4 +40,5 @@ export interface SearchTrekkingPlacesParams {
   difficulty?: DifficultyLevel;
   name?: string;
   limit?: number;
+  query?: string;
 }
