@@ -1,6 +1,5 @@
 import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import OpenAI from 'openai';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { TrekkingPlaceResponseDto } from '../dto/trekking-place-response.dto';
 import { DifficultyLevel } from '../dto/search-trekking-places.dto';
@@ -28,29 +27,11 @@ export interface AIRecommendation {
 @Injectable()
 export class AIService {
   private readonly logger = new Logger(AIService.name);
-  private readonly openai: OpenAI | null;
   private readonly gemini: GoogleGenerativeAI | null;
-  private readonly openaiModel: string;
   private readonly geminiModel: string;
-  private readonly openaiEnabled: boolean;
   private readonly geminiEnabled: boolean;
 
   constructor(private readonly configService: ConfigService) {
-    // Configuración de OpenAI
-    const openaiApiKey = this.configService.get<string>('openai.apiKey');
-    this.openaiModel = this.configService.get<string>('openai.model') || 'gpt-4o-mini';
-    this.openaiEnabled = !!openaiApiKey;
-
-    if (this.openaiEnabled) {
-      this.openai = new OpenAI({
-        apiKey: openaiApiKey,
-      });
-      this.logger.log('OpenAI habilitado');
-    } else {
-      this.logger.warn('OpenAI API Key no configurada.');
-      this.openai = null;
-    }
-
     // Configuración de Gemini
     const geminiApiKey = this.configService.get<string>('gemini.apiKey');
     this.geminiModel = this.configService.get<string>('gemini.model') || 'gemini-2.5-flash';
@@ -58,7 +39,7 @@ export class AIService {
 
     if (this.geminiEnabled) {
       this.gemini = new GoogleGenerativeAI(geminiApiKey);
-      this.logger.log('Google Gemini habilitado como fallback');
+      this.logger.log('Google Gemini habilitado');
     } else {
       this.logger.warn('Google Gemini API Key no configurada.');
       this.gemini = null;
@@ -66,53 +47,10 @@ export class AIService {
   }
 
   /**
-   * Verifica si algún proveedor de IA está disponible
+   * Verifica si el proveedor de IA está disponible
    */
   isAvailable(): boolean {
-    return this.openaiEnabled || this.geminiEnabled;
-  }
-
-  /**
-   * Detecta si un error es de cuota excedida (429)
-   */
-  private isQuotaExceededError(error: any): boolean {
-    const errorMessage = error?.message || String(error);
-    const statusCode = error?.status || error?.response?.status;
-    return (
-      statusCode === 429 ||
-      errorMessage.includes('429') ||
-      errorMessage.includes('quota') ||
-      errorMessage.includes('Quota exceeded')
-    );
-  }
-
-  /**
-   * Procesa consulta con OpenAI
-   */
-  private async processWithOpenAI(
-    systemPrompt: string,
-    userMessage: string,
-  ): Promise<string> {
-    if (!this.openaiEnabled || !this.openai) {
-      throw new Error('OpenAI no está disponible');
-    }
-
-    const completion = await this.openai.chat.completions.create({
-      model: this.openaiModel,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userMessage },
-      ],
-      temperature: 0.3,
-      response_format: { type: 'json_object' },
-    });
-
-    const content = completion.choices[0]?.message?.content;
-    if (!content) {
-      throw new Error('No se recibió respuesta de OpenAI');
-    }
-
-    return content;
+    return this.geminiEnabled;
   }
 
   /**
@@ -271,15 +209,14 @@ export class AIService {
   }
 
   /**
-   * Procesa una consulta en lenguaje natural con fallback automático
-   * Intenta primero con OpenAI, luego con Gemini si OpenAI falla con error 429
+   * Procesa una consulta en lenguaje natural usando Gemini
    */
   async processNaturalLanguageQuery(
     params: AISearchParams,
   ): Promise<AIRecommendation> {
     if (!this.isAvailable()) {
       throw new HttpException(
-        'Ningún servicio de IA está configurado. Configure OPENAI_API_KEY o GEMINI_API_KEY.',
+        'El servicio de IA no está configurado. Configure GEMINI_API_KEY.',
         HttpStatus.SERVICE_UNAVAILABLE,
       );
     }
@@ -316,57 +253,7 @@ ${params.userPreferences ? `Preferencias: ${JSON.stringify(params.userPreference
 
 Analiza esta consulta y extrae los parámetros de búsqueda.`;
 
-    // Intentar primero con OpenAI
-    if (this.openaiEnabled && this.openai) {
-      try {
-        this.logger.debug(`[OpenAI] Procesando consulta: ${params.query}`);
-        const content = await this.processWithOpenAI(systemPrompt, userMessage);
-        const recommendation = JSON.parse(content) as AIRecommendation;
-
-        this.logger.debug(
-          `[OpenAI] Procesó consulta exitosamente. Parámetros: ${JSON.stringify(recommendation.searchParams)}`,
-        );
-
-        return recommendation;
-      } catch (error) {
-        const isQuotaError = this.isQuotaExceededError(error);
-        this.logger.warn(
-          `[OpenAI] Error al procesar consulta: ${error.message}. ${isQuotaError ? 'Intentando con Gemini...' : ''}`,
-        );
-
-        // Si es error de cuota y Gemini está disponible, intentar con Gemini
-        if (isQuotaError && this.geminiEnabled && this.gemini) {
-          try {
-            this.logger.log(`[Gemini] Intentando procesar consulta como fallback`);
-            const content = await this.processWithGemini(systemPrompt, userMessage);
-            const recommendation = JSON.parse(content) as AIRecommendation;
-
-            this.logger.debug(
-              `[Gemini] Procesó consulta exitosamente. Parámetros: ${JSON.stringify(recommendation.searchParams)}`,
-            );
-
-            return recommendation;
-          } catch (geminiError) {
-            this.logger.error(
-              `[Gemini] Error al procesar consulta: ${geminiError.message}`,
-              geminiError.stack,
-            );
-            throw new HttpException(
-              'Error al procesar la consulta con ambos proveedores de IA. Continuando con búsqueda tradicional.',
-              HttpStatus.SERVICE_UNAVAILABLE,
-            );
-          }
-        }
-
-        // Si no es error de cuota o Gemini no está disponible, lanzar el error
-        throw new HttpException(
-          `Error al procesar la consulta con OpenAI: ${error.message}`,
-          HttpStatus.INTERNAL_SERVER_ERROR,
-        );
-      }
-    }
-
-    // Si OpenAI no está disponible, intentar directamente con Gemini
+    // Procesar con Gemini
     if (this.geminiEnabled && this.gemini) {
       try {
         this.logger.debug(`[Gemini] Procesando consulta: ${params.query}`);
@@ -391,13 +278,13 @@ Analiza esta consulta y extrae los parámetros de búsqueda.`;
     }
 
     throw new HttpException(
-      'Ningún servicio de IA está disponible',
+      'El servicio de IA no está disponible',
       HttpStatus.SERVICE_UNAVAILABLE,
     );
   }
 
   /**
-   * Genera recomendaciones personalizadas con fallback automático
+   * Genera recomendaciones personalizadas usando Gemini
    */
   async generateRecommendations(
     places: TrekkingPlaceResponseDto[],
@@ -433,46 +320,7 @@ Genera una recomendación de 2-3 oraciones que:
 
 Responde solo con el texto de la recomendación, sin formato adicional.`;
 
-    // Intentar primero con OpenAI
-    if (this.openaiEnabled && this.openai) {
-      try {
-        this.logger.debug(`[OpenAI] Generando recomendaciones para ${places.length} lugares`);
-        const completion = await this.openai.chat.completions.create({
-          model: this.openaiModel,
-          messages: [{ role: 'user', content: prompt }],
-          temperature: 0.7,
-          max_tokens: 200,
-        });
-
-        const recommendation = completion.choices[0]?.message?.content?.trim() || '';
-        if (recommendation) {
-          this.logger.debug('[OpenAI] Recomendación generada exitosamente');
-          return recommendation;
-        }
-      } catch (error) {
-        const isQuotaError = this.isQuotaExceededError(error);
-        this.logger.warn(
-          `[OpenAI] Error al generar recomendaciones: ${error.message}. ${isQuotaError && this.geminiEnabled ? 'Intentando con Gemini...' : 'Continuando sin recomendaciones.'}`,
-        );
-
-        // Si es error de cuota y Gemini está disponible, intentar con Gemini
-        if (isQuotaError && this.geminiEnabled && this.gemini) {
-          try {
-            this.logger.debug(`[Gemini] Generando recomendaciones como fallback`);
-            const recommendation = await this.generateRecommendationsWithGemini(prompt);
-            if (recommendation) {
-              return recommendation;
-            }
-          } catch (geminiError) {
-            this.logger.warn(
-              `[Gemini] Error al generar recomendaciones: ${geminiError.message}. Continuando sin recomendaciones.`,
-            );
-          }
-        }
-      }
-    }
-
-    // Si OpenAI no está disponible, intentar con Gemini
+    // Generar recomendaciones con Gemini
     if (this.geminiEnabled && this.gemini) {
       try {
         this.logger.debug(`[Gemini] Generando recomendaciones para ${places.length} lugares`);

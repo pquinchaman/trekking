@@ -38,8 +38,8 @@ Editar `.env` con tus configuraciones. **Importante**: Para habilitar todas las 
   - Obtén tu API Key en: https://console.cloud.google.com/
   - Habilita la API de Geocoding en tu proyecto
   
-- **OpenAI API Key** (opcional pero recomendado): Para búsqueda inteligente con IA
-  - Obtén tu API Key en: https://platform.openai.com/api-keys
+- **Google Gemini API Key** (opcional pero recomendado): Para búsqueda inteligente con IA
+  - Obtén tu API Key en: https://makersuite.google.com/app/apikey
   - El servicio funciona sin estas APIs, pero con funcionalidad limitada
 
 ## 🏃 Ejecución
@@ -159,10 +159,10 @@ Este proyecto utiliza:
   - Requiere API Key configurada en `GOOGLE_MAPS_API_KEY`
   - Sin esta API, la geocodificación automática no estará disponible
   
-- **OpenAI API** (opcional): Para procesamiento de lenguaje natural y generación de recomendaciones
-  - Requiere API Key configurada en `OPENAI_API_KEY`
+- **Google Gemini API** (opcional): Para procesamiento de lenguaje natural y generación de recomendaciones
+  - Requiere API Key configurada en `GEMINI_API_KEY`
   - Sin esta API, la búsqueda inteligente con IA no estará disponible
-  - Modelo por defecto: `gpt-4o-mini` (configurable con `OPENAI_MODEL`)
+  - Modelo por defecto: `gemini-2.5-flash` (configurable con `GEMINI_MODEL`)
 
 ## 📄 Licencia
 

@@ -209,7 +209,7 @@ Ejemplos de consultas válidas:
 - "trekking moderado con agua y sombra"
 - "lugares para niños en el Cajón del Maipo"
 
-**Nota**: Requiere `OPENAI_API_KEY` configurada en las variables de entorno.
+**Nota**: Requiere `GEMINI_API_KEY` configurada en las variables de entorno.
 
 ### Combinación de Parámetros
 
