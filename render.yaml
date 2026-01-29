@@ -1,0 +1,46 @@
+services:
+  # Backend API - Servicio Web
+  - type: web
+    name: trekking-backend
+    env: node
+    plan: free
+    region: oregon
+    buildCommand: cd backend && npm install && npm run build
+    startCommand: cd backend && npm run start:prod
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: NOMINATIM_USER_AGENT
+        value: TrekkingPlacesApp/1.0 (contact@example.com)
+      - key: NOMINATIM_ENABLED
+        value: true
+      # Las siguientes variables deben configurarse manualmente en Render Dashboard
+      # después de obtener las URLs de los servicios
+      - key: FRONTEND_URL
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: MAPBOX_API_KEY
+        sync: false
+      - key: NOMINATIM_API_URL
+        value: https://nominatim.openstreetmap.org/search
+      - key: OVERPASS_API_URL
+        value: https://overpass-api.de/api/interpreter
+      - key: OVERPASS_TIMEOUT
+        value: 30000
+
+  # Frontend - Sitio Estático
+  - type: web
+    name: trekking-frontend
+    env: static
+    plan: free
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: ./frontend/dist
+    # La variable VITE_API_BASE_URL debe configurarse manualmente
+    # con la URL del backend después de desplegarlo
+    envVars:
+      - key: VITE_API_BASE_URL
+        sync: false
